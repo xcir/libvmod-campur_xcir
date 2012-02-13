@@ -1,0 +1,29 @@
+varnishtest "gethash()"
+
+server s1 {
+       rxreq
+       txresp
+} -start
+
+varnish v1 -vcl+backend {
+	import campur_xcir from "${vmod_topbuild}/src/.libs/libvmod_campur_xcir.so";
+
+	sub vcl_recv {
+		set req.http.X-TEST=campur_xcir.gethash();
+	}
+	sub vcl_deliver{
+		set resp.http.X-TEST = req.http.X-TEST;
+		set resp.http.X-HASH = campur_xcir.gethash();
+	}
+} -start
+
+client c1 {
+	txreq -url "/"
+	rxresp
+	expect resp.http.X-TEST == "0000000000000000000000000000000000000000000000000000000000000000"
+	expect resp.http.X-HASH != "0000000000000000000000000000000000000000000000000000000000000000"
+
+}
+
+
+client c1 -run
