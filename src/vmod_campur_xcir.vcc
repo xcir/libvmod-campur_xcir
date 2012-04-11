@@ -8,4 +8,4 @@ Function TIME timeoffset(TIME,DURATION,BOOL)
 Function DURATION timecmp(TIME,TIME)
 #Function TIME strptime(STRING,STRING)
 
-Function IP inetpton(STRING)
+Function IP inet_pton(BOOL,STRING,STRING)

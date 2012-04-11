@@ -38,7 +38,7 @@ double vmod_timecmp(struct sess *sp,double time1,double time2){
 	return(time1-time2);
 }
 
-struct sockaddr_storage * vmod_inetpton(struct sess *sp,const char *str){
+struct sockaddr_storage * vmod_inet_pton(struct sess *sp,unsigned ipv6,const char *str,const char *defaultstr){
 	int size = sizeof(struct sockaddr_storage);
 	if(WS_Reserve(sp->wrk->ws, 0) < size){
 		WS_Release(sp->wrk->ws, 0);
@@ -48,21 +48,21 @@ struct sockaddr_storage * vmod_inetpton(struct sess *sp,const char *str){
 
 	int ret = 0;
 	tmp->ss_family = sp->sockaddr->ss_family;
-	switch(sp->sockaddr->ss_family){
-		case AF_INET:
-			ret=inet_pton(AF_INET , str , &((struct sockaddr_in *)tmp)->sin_addr);
-			break;
-		case AF_INET6:
-			ret=inet_pton(AF_INET6 , str , &((struct sockaddr_in6 *)tmp)->sin6_addr);
-			break;
+	if(ipv6){
+		ret=inet_pton(AF_INET6 , str , &((struct sockaddr_in6 *)tmp)->sin6_addr);
+	}else{
+		ret=inet_pton(AF_INET , str , &((struct sockaddr_in *)tmp)->sin_addr);
 	}
 	
 	WS_Release(sp->wrk->ws, size);
-	if(ret){
-		return tmp;
-	}else{
-		return NULL;
+	if(!ret){
+		if(ipv6){
+			ret=inet_pton(AF_INET6 , defaultstr , &((struct sockaddr_in6 *)tmp)->sin6_addr);
+		}else{
+			ret=inet_pton(AF_INET  , defaultstr , &((struct sockaddr_in *)tmp)->sin_addr);
+		}
 	}
+	return tmp;
 	
 }
 
