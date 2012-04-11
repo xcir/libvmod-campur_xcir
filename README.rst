@@ -66,14 +66,6 @@ Make targets:
 * make install - installs your vmod in `VMODDIR`
 * make check - runs the unit tests in ``src/tests/*.vtc``
 
-In your VCL you could then use this vmod along the following lines::
-        
-        import rewrite;
-
-        sub vcl_recv {
-                //redirect to my hp
-                error(rewrite.location(302,"http://xcir.net/"));
-        }
 
 HISTORY
 =======

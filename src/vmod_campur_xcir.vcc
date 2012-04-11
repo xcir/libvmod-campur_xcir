@@ -1,3 +1,11 @@
 Module campur_xcir
 Init init_function
+##HASH
 Function STRING gethash()
+
+##TIME
+Function TIME timeoffset(TIME,DURATION,BOOL)
+Function DURATION timecmp(TIME,TIME)
+#Function TIME strptime(STRING,STRING)
+
+Function IP inetpton(STRING)
