@@ -47,10 +47,11 @@ struct sockaddr_storage * vmod_inet_pton(struct sess *sp,unsigned ipv6,const cha
 	struct sockaddr_storage *tmp = (char *)sp->wrk->ws->f;
 
 	int ret = 0;
-	tmp->ss_family = sp->sockaddr->ss_family;
 	if(ipv6){
+		tmp->ss_family = AF_INET6;
 		ret=inet_pton(AF_INET6 , str , &((struct sockaddr_in6 *)tmp)->sin6_addr);
 	}else{
+		tmp->ss_family = AF_INET;
 		ret=inet_pton(AF_INET , str , &((struct sockaddr_in *)tmp)->sin_addr);
 	}
 	
