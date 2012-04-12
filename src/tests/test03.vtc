@@ -1,0 +1,35 @@
+varnishtest "timeoffset,timecmp"
+
+server s1 {
+       rxreq
+       txresp
+} -start
+
+varnish v1 -vcl+backend {
+	import campur_xcir from "${vmod_topbuild}/src/.libs/libvmod_campur_xcir.so";
+
+	sub vcl_recv {
+		
+	}
+	sub vcl_deliver{
+		if(campur_xcir.timecmp(now,campur_xcir.timeoffset(now , 10s , true)) > 0s	){
+			set resp.http.a="1";
+		}
+		if(campur_xcir.timecmp(now,campur_xcir.timeoffset(now , 10s , false)) < 0s	){
+			set resp.http.b="1";
+		}
+		
+	}
+} -start
+
+client c1 {
+	txreq -url "/"
+	rxresp
+	expect resp.http.a	== "1"
+	expect resp.http.b	== "1"
+
+
+}
+
+
+client c1 -run

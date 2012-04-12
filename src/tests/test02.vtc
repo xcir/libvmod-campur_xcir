@@ -1,0 +1,46 @@
+varnishtest "inet_pton"
+
+server s1 {
+       rxreq
+       txresp
+} -start
+
+varnish v1 -vcl+backend {
+	import campur_xcir from "${vmod_topbuild}/src/.libs/libvmod_campur_xcir.so";
+
+	sub vcl_recv {
+		
+	}
+	sub vcl_deliver{
+		set resp.http.v6ok	= campur_xcir.inet_pton(true,"2001:0db8:bd05:01d2:288a:1fc0:0001:10ee"		,"1982:db8:20:3:1000:100:20:3");
+		set resp.http.v6ng	= campur_xcir.inet_pton(true,"2001:0db8:bd05:01d2:288a:1fc0:0001:10eeHOGE"	,"1982:db8:20:3:1000:100:20:3");
+
+		set resp.http.v4v6	= campur_xcir.inet_pton(false,"2001:0db8:bd05:01d2:288a:1fc0:0001:10ee"		,"1982:db8:20:3:1000:100:20:3");
+		set resp.http.v6v4	= campur_xcir.inet_pton(true,"192.168.1.1"									,"1982:db8:20:3:1000:100:20:3");
+		
+		set resp.http.v4ok	= campur_xcir.inet_pton(false,"1.1.1.1"										,"2.2.2.2");
+		set resp.http.v4ng	= campur_xcir.inet_pton(false,"1.1.1.1HOGE"									,"2.2.2.2");
+
+		set resp.http.v6nn	= campur_xcir.inet_pton(true,"1.1.1.1HOM"										,"HOG");
+		set resp.http.v4nn	= campur_xcir.inet_pton(false,"1.1.1.1HOM"										,"HOG");
+	}
+} -start
+
+client c1 {
+	txreq -url "/"
+	rxresp
+	expect resp.http.v6ok	== "2001:db8:bd05:1d2:288a:1fc0:1:10ee"
+	expect resp.http.v6ng	== "1982:db8:20:3:1000:100:20:3"
+	expect resp.http.v4v6	== "0.0.0.0"
+	expect resp.http.v6v4	== "1982:db8:20:3:1000:100:20:3"
+	expect resp.http.v4ok	== "1.1.1.1"
+	expect resp.http.v4ng	== "2.2.2.2"
+
+	expect resp.http.v6nn	== "::"
+	expect resp.http.v4nn	== "0.0.0.0"
+
+
+}
+
+
+client c1 -run
