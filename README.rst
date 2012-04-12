@@ -42,6 +42,78 @@ Example
                 //response
                 X-HASH: c6643369e6d89365c552af9c2fa153db5c24fd8cb0f58e48125e01b433ac3677
 
+inet_pton
+---------
+
+Prototype
+        ::
+
+                inet_pton(BOOL ipv6 , STRING str , STRING defaultstr)
+Return value
+	IP
+Description
+	Convert IP addresses from string
+Example
+        ::
+
+                set resp.http.v6 = campur_xcir.inet_pton(true,"2001:0db8:bd05:01d2:288a:1fc0:0001:10ee","1982:db8:20:3:1000:100:20:3");
+                set resp.http.v4 = campur_xcir.inet_pton(false,"1.1.1.1","2.2.2.2");
+                set resp.http.v6ng = campur_xcir.inet_pton(true,"2001:0db8:bd05:01d2:288a:1fc0:0001:10eeHOGE","1982:db8:20:3:1000:100:20:3");
+                set resp.http.v4ng = campur_xcir.inet_pton(false,"1.1.1.1HOGE","2.2.2.2");
+
+                //response
+                v6: 2001:db8:bd05:1d2:288a:1fc0:1:10ee
+                v4: 1.1.1.1
+                v6ng: 1982:db8:20:3:1000:100:20:3
+                v4ng: 2.2.2.2
+                
+                
+                //acl
+                acl local {
+                    "192.168.1.0"/24;
+                    !"0.0.0.0";
+                }
+                if(campur_xcir.inet_pton(false , req.http.X-Forwarded-For , "0.0.0.0") ~ local){
+                    //acl ok
+                    ...
+                }
+
+timecmp
+---------
+
+Prototype
+        ::
+
+                timecmp(TIME time1 , TIME time2)
+Return value
+	DURATION
+Description
+	return(time1-time2)
+
+timeoffset
+---------
+
+Prototype
+        ::
+
+                timeoffset(TIME time , DURATION os , BOOL rev)
+Return value
+	TIME
+Description
+	Calculate time
+
+Example
+        ::
+
+                set resp.http.x = campur_xcir.timeoffset(now , 1d , false);
+                set resp.http.y = campur_xcir.timeoffset(now , 1d , true);
+                set resp.http.z = now;
+                
+                //response
+                x: Fri, 13 Apr 2012 16:15:40 GMT
+                y: Wed, 11 Apr 2012 16:15:40 GMT
+                z: Thu, 12 Apr 2012 16:15:40 GMT
+
 INSTALLATION
 ============
 
