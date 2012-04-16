@@ -1,10 +1,10 @@
-============
+===================
 vmod_campur_xcir
-============
+===================
 
-----------------------
+-------------------------------
 Varnish campur module
-----------------------
+-------------------------------
 
 :Author: Syohei Tanaka(@xcir)
 :Date: 2012-02-13
@@ -12,19 +12,19 @@ Varnish campur module
 :Manual section: 3
 
 SYNOPSIS
-========
+===========
 
 import campur_xcir;
 
 DESCRIPTION
-===========
+==============
 
 
 FUNCTIONS
-=========
+============
 
 gethash
----------
+-------------
 
 Prototype
         ::
@@ -43,7 +43,7 @@ Example
                 X-HASH: c6643369e6d89365c552af9c2fa153db5c24fd8cb0f58e48125e01b433ac3677
 
 inet_pton
----------
+-------------
 
 Prototype
         ::
@@ -79,7 +79,7 @@ Example
                 }
 
 timecmp
----------
+-------------
 
 Prototype
         ::
@@ -91,7 +91,7 @@ Description
 	return(time1-time2)
 
 timeoffset
----------
+-------------
 
 Prototype
         ::
@@ -115,7 +115,7 @@ Example
                 z: Thu, 12 Apr 2012 16:15:40 GMT
 
 INSTALLATION
-============
+==================
 
 Installation requires Varnish source tree.
 
@@ -140,12 +140,13 @@ Make targets:
 
 
 HISTORY
-=======
+===========
 
+Version 0.2: add function timecmp , inet_pton , timeoffset
 Version 0.1: add function gethash
 
 COPYRIGHT
-=========
+=============
 
 This document is licensed under the same license as the
 libvmod-rewrite project. See LICENSE for details.
