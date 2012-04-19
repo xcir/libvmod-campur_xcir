@@ -62,9 +62,17 @@ struct sockaddr_storage * vmod_inet_pton(struct sess *sp,unsigned ipv6,const cha
 	
 	if(!ret){
 		if(ipv6){
-			ret=inet_pton(AF_INET6 , defaultstr , &((struct sockaddr_in6 *)tmp)->sin6_addr);
+			if(defaultstr == NULL){
+				ret=inet_pton(AF_INET6 , "ABC" , &((struct sockaddr_in6 *)tmp)->sin6_addr);
+			}else{
+				ret=inet_pton(AF_INET6 , defaultstr , &((struct sockaddr_in6 *)tmp)->sin6_addr);
+			}
 		}else{
-			ret=inet_pton(AF_INET  , defaultstr , &((struct sockaddr_in *)tmp)->sin_addr);
+			if(defaultstr == NULL){
+				ret=inet_pton(AF_INET  , "ABC" , &((struct sockaddr_in *)tmp)->sin_addr);
+			}else{
+				ret=inet_pton(AF_INET  , defaultstr , &((struct sockaddr_in *)tmp)->sin_addr);
+			}
 		}
 	}
 	WS_Release(sp->wrk->ws, size);
