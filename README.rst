@@ -8,7 +8,7 @@ Varnish campur module
 
 :Author: Syohei Tanaka(@xcir)
 :Date: 2012-02-13
-:Version: 0.1
+:Version: 0.2
 :Manual section: 3
 
 SYNOPSIS
@@ -73,7 +73,7 @@ Example
                     "192.168.1.0"/24;
                     !"0.0.0.0";
                 }
-                if(campur_xcir.inet_pton(false , req.http.X-Forwarded-For , "0.0.0.0") ~ local){
+                if(campur_xcir.inet_pton(false , regsub(req.http.X-Forwarded-For,"^([0-9]+.[0-9]+.[0-9]+.[0-9]+).*$" , "\1") , "0.0.0.0") ~ local){
                     //acl ok
                     ...
                 }
