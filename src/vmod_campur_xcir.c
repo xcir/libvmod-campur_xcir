@@ -59,10 +59,10 @@ struct sockaddr_storage * vmod_inet_pton(struct sess *sp,unsigned ipv6,const cha
 	}
 
 	if(str != NULL){
-		ret=inet_pton(af , str , paddr);
+		ret = inet_pton(af , str , paddr);
 	}
 	
-	if(!ret){
+	if(ret < 1){
 		if(defaultstr == NULL){
 			ret=inet_pton(af , "(:3[__])" , paddr);
 		}else{
