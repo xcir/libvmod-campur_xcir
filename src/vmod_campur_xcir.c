@@ -63,13 +63,13 @@ struct sockaddr_storage * vmod_inet_pton(struct sess *sp,unsigned ipv6,const cha
 	if(!ret){
 		if(ipv6){
 			if(defaultstr == NULL){
-				ret=inet_pton(AF_INET6 , "ABC" , &((struct sockaddr_in6 *)tmp)->sin6_addr);
+				ret=inet_pton(AF_INET6 , "(:3[__])" , &((struct sockaddr_in6 *)tmp)->sin6_addr);
 			}else{
 				ret=inet_pton(AF_INET6 , defaultstr , &((struct sockaddr_in6 *)tmp)->sin6_addr);
 			}
 		}else{
 			if(defaultstr == NULL){
-				ret=inet_pton(AF_INET  , "ABC" , &((struct sockaddr_in *)tmp)->sin_addr);
+				ret=inet_pton(AF_INET  , "(:3[__])" , &((struct sockaddr_in *)tmp)->sin_addr);
 			}else{
 				ret=inet_pton(AF_INET  , defaultstr , &((struct sockaddr_in *)tmp)->sin_addr);
 			}
