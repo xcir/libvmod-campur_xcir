@@ -45,17 +45,21 @@ struct sockaddr_storage * vmod_inet_pton(struct sess *sp,unsigned ipv6,const cha
 		return NULL;
 	}
 	struct sockaddr_storage *tmp = (char *)sp->wrk->ws->f;
-
 	int ret = 0;
 	if(ipv6){
 		tmp->ss_family = AF_INET6;
-		ret=inet_pton(AF_INET6 , str , &((struct sockaddr_in6 *)tmp)->sin6_addr);
 	}else{
 		tmp->ss_family = AF_INET;
-		ret=inet_pton(AF_INET , str , &((struct sockaddr_in *)tmp)->sin_addr);
+	}
+
+	if(str != NULL){
+		if(ipv6){
+			ret=inet_pton(AF_INET6 , str , &((struct sockaddr_in6 *)tmp)->sin6_addr);
+		}else{
+			ret=inet_pton(AF_INET , str , &((struct sockaddr_in *)tmp)->sin_addr);
+		}
 	}
 	
-	WS_Release(sp->wrk->ws, size);
 	if(!ret){
 		if(ipv6){
 			ret=inet_pton(AF_INET6 , defaultstr , &((struct sockaddr_in6 *)tmp)->sin6_addr);
@@ -63,6 +67,7 @@ struct sockaddr_storage * vmod_inet_pton(struct sess *sp,unsigned ipv6,const cha
 			ret=inet_pton(AF_INET  , defaultstr , &((struct sockaddr_in *)tmp)->sin_addr);
 		}
 	}
+	WS_Release(sp->wrk->ws, size);
 	return tmp;
 	
 }
