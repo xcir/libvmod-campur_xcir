@@ -45,34 +45,28 @@ struct sockaddr_storage * vmod_inet_pton(struct sess *sp,unsigned ipv6,const cha
 		return NULL;
 	}
 	struct sockaddr_storage *tmp = (char *)sp->wrk->ws->f;
+	void *paddr;
 	int ret = 0;
+	int af;
 	if(ipv6){
 		tmp->ss_family = AF_INET6;
+		paddr = &((struct sockaddr_in6 *)tmp)->sin6_addr;
+		af = AF_INET6;
 	}else{
 		tmp->ss_family = AF_INET;
+		paddr = &((struct sockaddr_in *)tmp)->sin_addr;
+		af = AF_INET;
 	}
 
 	if(str != NULL){
-		if(ipv6){
-			ret=inet_pton(AF_INET6 , str , &((struct sockaddr_in6 *)tmp)->sin6_addr);
-		}else{
-			ret=inet_pton(AF_INET , str , &((struct sockaddr_in *)tmp)->sin_addr);
-		}
+		ret=inet_pton(af , str , paddr);
 	}
 	
 	if(!ret){
-		if(ipv6){
-			if(defaultstr == NULL){
-				ret=inet_pton(AF_INET6 , "(:3[__])" , &((struct sockaddr_in6 *)tmp)->sin6_addr);
-			}else{
-				ret=inet_pton(AF_INET6 , defaultstr , &((struct sockaddr_in6 *)tmp)->sin6_addr);
-			}
+		if(defaultstr == NULL){
+			ret=inet_pton(af , "(:3[__])" , paddr);
 		}else{
-			if(defaultstr == NULL){
-				ret=inet_pton(AF_INET  , "(:3[__])" , &((struct sockaddr_in *)tmp)->sin_addr);
-			}else{
-				ret=inet_pton(AF_INET  , defaultstr , &((struct sockaddr_in *)tmp)->sin_addr);
-			}
+			ret=inet_pton(af , defaultstr , paddr);
 		}
 	}
 	WS_Release(sp->wrk->ws, size);
