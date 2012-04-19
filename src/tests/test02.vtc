@@ -25,6 +25,8 @@ varnish v1 -vcl+backend {
 		set resp.http.v4nn	= campur_xcir.inet_pton(false,"1.1.1.1HOM"										,"HOG");
 		set resp.http.ng	= campur_xcir.inet_pton(false,req.http.hogehoge,"0.0.0.0");
 		set resp.http.ng2	= campur_xcir.inet_pton(false,req.http.hogehoge,req.http.hogehoge2);
+		set resp.http.ng3	= campur_xcir.inet_pton(true,req.http.hogehoge,"1982:db8:20:3:1000:100:20:3");
+		set resp.http.ng4	= campur_xcir.inet_pton(true,req.http.hogehoge,req.http.hogehoge2);
 	}
 } -start
 
@@ -42,6 +44,8 @@ client c1 {
 	expect resp.http.v4nn	== "0.0.0.0"
 	expect resp.http.ng     == "0.0.0.0"
 	expect resp.http.ng2    == "0.0.0.0"
+	expect resp.http.ng3	== "1982:db8:20:3:1000:100:20:3"
+	expect resp.http.ng4	== "::"
 
 }
 
