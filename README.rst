@@ -41,6 +41,24 @@ Example
 
                 //response
                 X-HASH: c6643369e6d89365c552af9c2fa153db5c24fd8cb0f58e48125e01b433ac3677
+postcapture
+-------------
+
+Prototype
+        ::
+
+                postcapture()
+Return value
+	STRING
+Description
+	get POST request(Only "application/x-www-form-urlencoded")
+Example
+        ::
+
+                std.log(campur_xcir.postcapture());
+
+                //response
+                12 VCL_Log      c submitter=&pics%2F=
 
 inet_pton
 -------------
@@ -142,6 +160,7 @@ Make targets:
 HISTORY
 ===========
 
+Version 0.3: add function postcapture
 Version 0.2: add function timecmp , inet_pton , timeoffset
 Version 0.1: add function gethash
 
@@ -156,3 +175,5 @@ libvmod-rewrite project. See LICENSE for details.
 File layout and configuration based on libvmod-example
 
 * Copyright (c) 2011 Varnish Software AS
+
+postcapture method based on VFW( https://github.com/scarpellini/VFW )

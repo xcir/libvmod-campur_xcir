@@ -9,3 +9,6 @@ Function DURATION timecmp(TIME,TIME)
 #Function TIME strptime(STRING,STRING)
 
 Function IP inet_pton(BOOL,STRING,STRING)
+
+Function STRING postcapture()
+
