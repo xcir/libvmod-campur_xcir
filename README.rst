@@ -47,16 +47,16 @@ postcapture
 Prototype
         ::
 
-                postcapture(STRING target)
+                postcapture(STRING target,BOOL force)
 Return value
 	INT
 Description
 	(experimental:Might change the parameter)
-	get POST request(Only "application/x-www-form-urlencoded")
+	get POST request(Only "application/x-www-form-urlencoded" "multipart/mixed")
 Example
         ::
 
-                if(campur_xcir.postcapture("x-test") == 1){
+                if(campur_xcir.postcapture("x-test",false) == 1){
                   std.log("raw: " + req.http.x-test);
                   std.log("submitter: " + req.http.submitter);
                 }

@@ -10,5 +10,5 @@ Function DURATION timecmp(TIME,TIME)
 
 Function IP inet_pton(BOOL,STRING,STRING)
 
-Function INT postcapture(STRING)
+Function INT postcapture(STRING,BOOL)
 

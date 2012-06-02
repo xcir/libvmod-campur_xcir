@@ -81,9 +81,86 @@ struct sockaddr_storage * vmod_inet_pton(struct sess *sp,unsigned ipv6,const cha
 	return tmp;
 	
 }
+void decodeForm_multipart(struct sess *sp,char *tg){
+	
+	char head[256];
+	char bd[258];
+	char *tgt = tg;
+	char *boundary, *h_ctype_ptr;
+	h_ctype_ptr = VRT_GetHdr(sp, HDR_REQ, "\015Content-Type:");
+//Jun  2 17:44:38 localhost varnishd[10055]: multipart/form-data; boundary=----WebKitFormBoundary9zMcPL0jwBSXMH2x	
+	boundary = strstr(h_ctype_ptr,"; boundary=");
+	if(!boundary || strlen(boundary) < 255) return;
+	boundary +=11;
+	bd[0] = '-';
+	bd[1] = '-';
+	bd[2] = 0;
+	strncat(bd,boundary,strlen(boundary));
+	
+	int bdlen = strlen(bd);
+	
+//	strlen(boundary);
+	char* st = strstr(tgt,bd);
+	char* ed;
+	char* ned;
+	char* ns;
+	char* ne;
+	char* ne2;
+	char* bod;
+	char* fn;
+	char tmp;
+	int hsize;
+	int idx;
+	while(1){
+		ed = strstr(st + 1,bd);
+		//getdata
+		ns = strstr(st+bdlen,"name=\"");
+		if(!ns) break;
+		ns+=6;
+		ne  = strstr(ns,"\"\r\n");
+		ne2 = strstr(ns,"\"; ");
+		bod = strstr(ns,"\r\n\r\n");
+		fn = strstr(ns,"; filename");
+		if(!ne) break;
+		if(ne2 && ne2 < ne) ne = ne2;
+		if(!bod) break;
 
+		if((ne -1)[0]=='\\'){
+			idx = 1;
+		}else{
+			idx=0;
+		}
+		tmp=ne[idx];
+		ne[idx]=0;
+		hsize=strlen(ns) +1;
+		if(hsize > 255) break;
+		head[0] = hsize;
+		head[1] = 0;
+		snprintf(head +1,255,"%s:",ns);
+		ne[idx]=tmp;
 
-void decodeForm(struct sess *sp,char *tg){
+		//filecheck
+		if(fn && fn < bod){
+			//content is file(skip)
+			st = ed;
+			continue;
+		}
+		ned = ed -2;
+		bod +=4;
+		tmp = ned[0];
+		ned[0]=0;
+		VRT_SetHdr(sp, HDR_REQ, head, bod, vrt_magic_string_end);
+		ned[0]=tmp;
+		//search \r\n\r\n
+		
+		//search name="
+		//"\r
+		//" ;
+		if(!ed)break;
+		st = ed;
+	}
+}
+void decodeForm_urlencoded(struct sess *sp,char *tg){
 	char head[256];
 	char *eq,*amp;
 	char *tgt = tg;
@@ -116,10 +193,10 @@ void decodeForm(struct sess *sp,char *tg){
 }
 //----MMM893
 int 
-vmod_postcapture(struct sess *sp,const char* target){
+vmod_postcapture(struct sess *sp,const char* target,unsigned force){
 	
 	
-
+//デバッグでReInitとかrestartの時に不具合でないかチェック（ロールバックも）
 /*
 	
 	1	=成功
@@ -138,6 +215,8 @@ vmod_postcapture(struct sess *sp,const char* target){
 	char buf[1024];
 	char head[256];
 
+	
+	
 	//headbuild
 	int hsize = strlen(target) +1;
 	if(hsize > 255){
@@ -147,8 +226,16 @@ vmod_postcapture(struct sess *sp,const char* target){
 	head[1] = 0;
 	snprintf(head +1,255,"%s:",target);
 	
+	unsigned multipart = 0;
+	
 	h_ctype_ptr = VRT_GetHdr(sp, HDR_REQ, "\015Content-Type:");
-	if (VRT_strcmp(h_ctype_ptr, "application/x-www-form-urlencoded")) {
+//Jun  2 17:44:38 localhost varnishd[10055]: multipart/form-data; boundary=----WebKitFormBoundary9zMcPL0jwBSXMH2x
+	
+	if (!VRT_strcmp(h_ctype_ptr, "application/x-www-form-urlencoded")) {
+		//multipart/form-data
+	}else if(h_ctype_ptr != NULL && h_ctype_ptr == strstr(h_ctype_ptr, "multipart/form-data")){
+		multipart = 1;
+	}else{
 		return -4;
 	}
 
@@ -162,8 +249,6 @@ vmod_postcapture(struct sess *sp,const char* target){
 		return -2;
 	}
 	
-//	syslog(6,"----rxbuf %ld %ld %ld",sp->htc->rxbuf.b,sp->htc->rxbuf.e,Tlen(sp->htc->rxbuf));
-//	syslog(6,"----pipeline %ld %ld %ld",sp->htc->pipeline.b,sp->htc->pipeline.e,Tlen(sp->htc->pipeline));
 	
 	int maxlen = params->http_req_hdr_len + 1;
 
@@ -211,9 +296,13 @@ vmod_postcapture(struct sess *sp,const char* target){
 	sp->htc->pipeline.e = newbuffer + orig_content_length;
 
 	//target
-	VRT_SetHdr(sp, HDR_REQ, head, newbuffer, vrt_magic_string_end);
-	decodeForm(sp, newbuffer);
-	
+	if(multipart){
+		if(force) VRT_SetHdr(sp, HDR_REQ, head, newbuffer, vrt_magic_string_end);
+		decodeForm_multipart(sp, newbuffer);
+	}else{
+		VRT_SetHdr(sp, HDR_REQ, head, newbuffer, vrt_magic_string_end);
+		decodeForm_urlencoded(sp, newbuffer);
+	}
 	return 1;
 }
 
