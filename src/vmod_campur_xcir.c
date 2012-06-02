@@ -82,19 +82,26 @@ struct sockaddr_storage * vmod_inet_pton(struct sess *sp,unsigned ipv6,const cha
 	return tmp;
 	
 }
-char * url_encode(struct sess *sp, char* url){
+char * url_encode(struct sess *sp, char* url,char *head){
 	/*
 	base:
 	 http://d.hatena.ne.jp/hibinotatsuya/20091128/1259404695
 	*/
-	///////////////////////////////////////////////
-	int u = WS_Reserve(sp->wrk->ws, 0);
-	if(u < 3 * strlen(url) + 3){
-		return NULL;
+	//3075
+	char *copy;
+	char buf[3075];
+	int size = 3 * strlen(url) + 3;
+	if(size > 3075){
+		///////////////////////////////////////////////
+		int u = WS_Reserve(sp->wrk->ws, 0);
+		if(u < size){
+			return NULL;
+		}
+		copy = (char*)sp->wrk->ws->f;
+		///////////////////////////////////////////////
+	}else{
+		copy = buf;
 	}
-	char *copy = (char*)sp->wrk->ws->f;
-	///////////////////////////////////////////////
-
 	
     int i;
     char *pt = url;
@@ -130,8 +137,9 @@ char * url_encode(struct sess *sp, char* url){
     }
     
     *url_en = 0;
-	
-	WS_Release(sp->wrk->ws,strlen(copy)+1);
+	if(size > 3075){
+		WS_Release(sp->wrk->ws,strlen(copy)+1);
+	}
     
     return copy;
 }
@@ -206,7 +214,7 @@ void decodeForm_multipart(struct sess *sp,char *tg){
 		tmp = ned[0];
 		ned[0]=0;
 		//bodyをURLエンコードする
-		uebod = url_encode(sp,bod);
+		uebod = url_encode(sp,bod,head);
 		if(uebod){
 			VRT_SetHdr(sp, HDR_REQ, head, uebod, vrt_magic_string_end);
 		}
@@ -258,6 +266,7 @@ vmod_postcapture(struct sess *sp,const char* target,unsigned force){
 	
 //デバッグでReInitとかrestartの時に不具合でないかチェック（ロールバックも）
 //Content = pipeline.e-bの時はRxbuf確保をしない（必要ないので）
+//mix形式をurlencodeに切り替える（組み換えで安全に）
 /*
 	
 	1	=成功
@@ -312,7 +321,7 @@ vmod_postcapture(struct sess *sp,const char* target,unsigned force){
 
 	
 	int maxlen = params->http_req_hdr_len + 1;
-	if(sp->htc->pipeline.e - sp->htc->pipeline.b == content_length){
+	if(Tlen(sp->htc->pipeline) == content_length){
 		//no read
 		newbuffer = sp->htc->pipeline.b;
 	}else{
