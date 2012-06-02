@@ -23,6 +23,7 @@ init_function(struct vmod_priv *priv, const struct VCL_conf *conf)
 	return (0);
 }
 
+
 const char *
 vmod_gethash(struct sess *sp){
 	int size = DIGEST_LEN*2+1;
@@ -81,6 +82,60 @@ struct sockaddr_storage * vmod_inet_pton(struct sess *sp,unsigned ipv6,const cha
 	return tmp;
 	
 }
+char * url_encode(struct sess *sp, char* url){
+	/*
+	base:
+	 http://d.hatena.ne.jp/hibinotatsuya/20091128/1259404695
+	*/
+	///////////////////////////////////////////////
+	int u = WS_Reserve(sp->wrk->ws, 0);
+	if(u < 3 * strlen(url) + 3){
+		return NULL;
+	}
+	char *copy = (char*)sp->wrk->ws->f;
+	///////////////////////////////////////////////
+
+	
+    int i;
+    char *pt = url;
+    unsigned char c;
+    char *url_en = copy;
+
+    for(i = 0; i < strlen(pt); i++){
+        c = *url;
+
+        if((c >= '0' && c <= '9')
+        || (c >= 'A' && c <= 'Z')
+        || (c >= 'a' && c <= 'z')
+        || (c == '\'')
+        || (c == '*')
+        || (c == ')')
+        || (c == '(')
+        || (c == '-')
+        || (c == '.')
+        || (c == '_')){
+            *url_en = c;
+            ++url_en;
+        }else if(c == ' '){
+            *url_en = '+';
+            ++url_en;
+        }else{
+            *url_en = '%';
+            ++url_en;
+            sprintf(url_en, "%02x", c);
+            url_en = url_en + 2;
+        }
+
+        ++url;
+    }
+    
+    *url_en = 0;
+	
+	WS_Release(sp->wrk->ws,strlen(copy)+1);
+    
+    return copy;
+}
+
 void decodeForm_multipart(struct sess *sp,char *tg){
 	
 	char head[256];
@@ -109,6 +164,7 @@ void decodeForm_multipart(struct sess *sp,char *tg){
 	char* bod;
 	char* fn;
 	char tmp;
+	char *uebod;
 	int hsize;
 	int idx;
 	while(1){
@@ -149,7 +205,11 @@ void decodeForm_multipart(struct sess *sp,char *tg){
 		bod +=4;
 		tmp = ned[0];
 		ned[0]=0;
-		VRT_SetHdr(sp, HDR_REQ, head, bod, vrt_magic_string_end);
+		//bodyをURLエンコードする
+		uebod = url_encode(sp,bod);
+		if(uebod){
+			VRT_SetHdr(sp, HDR_REQ, head, uebod, vrt_magic_string_end);
+		}
 		ned[0]=tmp;
 		//search \r\n\r\n
 		
