@@ -149,6 +149,7 @@ void decodeForm_multipart(struct sess *sp,char *tg){
 		bod +=4;
 		tmp = ned[0];
 		ned[0]=0;
+		syslog(6,"--%s %s",head+1,bod);
 		VRT_SetHdr(sp, HDR_REQ, head, bod, vrt_magic_string_end);
 		ned[0]=tmp;
 		//search \r\n\r\n
