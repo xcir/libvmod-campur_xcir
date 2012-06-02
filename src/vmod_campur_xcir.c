@@ -257,6 +257,7 @@ vmod_postcapture(struct sess *sp,const char* target,unsigned force){
 	
 	
 //デバッグでReInitとかrestartの時に不具合でないかチェック（ロールバックも）
+//Content = pipeline.e-bの時はRxbuf確保をしない（必要ないので）
 /*
 	
 	1	=成功
@@ -270,7 +271,7 @@ vmod_postcapture(struct sess *sp,const char* target,unsigned force){
 	)){return "";}
 */
 	unsigned long content_length,orig_content_length;
-	char *h_clen_ptr, *h_ctype_ptr;
+	char *h_clen_ptr, *h_ctype_ptr, *newbuffer;
 	int buf_size, rsize;
 	char buf[1024];
 	char head[256];
@@ -308,52 +309,53 @@ vmod_postcapture(struct sess *sp,const char* target,unsigned force){
 	if (content_length <= 0) {
 		return -2;
 	}
-	
+
 	
 	int maxlen = params->http_req_hdr_len + 1;
-
-	int rxbuf = Tlen(sp->htc->rxbuf);
-	
-	///////////////////////////////////////////////
-	int u = WS_Reserve(sp->wrk->ws, 0);
-	if(u < content_length + rxbuf + 1){
-		return -1;
-	}
-	char *newbuffer = (char*)sp->wrk->ws->f;
-	memcpy(newbuffer, sp->htc->rxbuf.b, rxbuf);
-	sp->htc->rxbuf.b = newbuffer;
-	newbuffer += rxbuf;
-	newbuffer[0]= 0;
-	sp->htc->rxbuf.e = newbuffer;
-	WS_Release(sp->wrk->ws,content_length + rxbuf + 1);
-	///////////////////////////////////////////////
-
-	//
+	if(sp->htc->pipeline.e - sp->htc->pipeline.b == content_length){
+		//no read
+		newbuffer = sp->htc->pipeline.b;
+	}else{
+		int rxbuf = Tlen(sp->htc->rxbuf);
+		///////////////////////////////////////////////
+		int u = WS_Reserve(sp->wrk->ws, 0);
+		if(u < content_length + rxbuf + 1){
+			return -1;
+		}
+		newbuffer = (char*)sp->wrk->ws->f;
+		memcpy(newbuffer, sp->htc->rxbuf.b, rxbuf);
+		sp->htc->rxbuf.b = newbuffer;
+		newbuffer += rxbuf;
+		newbuffer[0]= 0;
+		sp->htc->rxbuf.e = newbuffer;
+		WS_Release(sp->wrk->ws,content_length + rxbuf + 1);
+		///////////////////////////////////////////////
 		
 		while (content_length) {
-			if (content_length > sizeof(buf)) {
-				buf_size = sizeof(buf) - 1;
-			}
-			else {
-				buf_size = content_length;
-			}
+				if (content_length > sizeof(buf)) {
+					buf_size = sizeof(buf) - 1;
+				}
+				else {
+					buf_size = content_length;
+				}
 
-			// read body data into 'buf'
-			rsize = HTC_Read(sp->htc, buf, buf_size);
+				// read body data into 'buf'
+				rsize = HTC_Read(sp->htc, buf, buf_size);
 
-			if (rsize <= 0) {
-				return -3;
-			}
+				if (rsize <= 0) {
+					return -3;
+				}
 
-			hsize += rsize;
-			content_length -= rsize;
+				hsize += rsize;
+				content_length -= rsize;
 
-			strncat(newbuffer, buf, buf_size);
+				strncat(newbuffer, buf, buf_size);
 
+		}
+		sp->htc->pipeline.b = newbuffer;
+		sp->htc->pipeline.e = newbuffer + orig_content_length;
 	}
 
-	sp->htc->pipeline.b = newbuffer;
-	sp->htc->pipeline.e = newbuffer + orig_content_length;
 
 	//target
 	if(multipart){
