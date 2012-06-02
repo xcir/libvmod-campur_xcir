@@ -82,27 +82,9 @@ struct sockaddr_storage * vmod_inet_pton(struct sess *sp,unsigned ipv6,const cha
 	return tmp;
 	
 }
-unsigned url_encode(struct sess *sp, char* url,char *head){
-	/*
-	base:
-	 http://d.hatena.ne.jp/hibinotatsuya/20091128/1259404695
-	*/
-	//3075
-	char *copy;
-	char buf[3075];
-	int size = 3 * strlen(url) + 3;
-	if(size > 3075){
-		///////////////////////////////////////////////
-		int u = WS_Reserve(sp->wrk->ws, 0);
-		if(u < size){
-			return 0;
-		}
-		copy = (char*)sp->wrk->ws->f;
-		///////////////////////////////////////////////
-	}else{
-		copy = buf;
-	}
-	
+//先にこっちでサイズを計算してurlencode形式に変更するint*
+
+unsigned __url_encode(char* url,int *calc,char *copy){
     int i;
     char *pt = url;
     unsigned char c;
@@ -137,6 +119,29 @@ unsigned url_encode(struct sess *sp, char* url,char *head){
     }
     
     *url_en = 0;
+	return(1);
+}
+unsigned url_encode(struct sess *sp, char* url,char *head,int *calc){
+	char *copy;
+	char buf[3075];
+	int size = 3 * strlen(url) + 3;
+	if(size > 3075){
+		///////////////////////////////////////////////
+		int u = WS_Reserve(sp->wrk->ws, 0);
+		if(u < size){
+			return 0;
+		}
+		copy = (char*)sp->wrk->ws->f;
+		///////////////////////////////////////////////
+	}else{
+		copy = buf;
+	}
+	__url_encode(url,calc,copy);
+//////////////
+	//13 34 47
+	//bodysize
+
+	*calc += strlen(copy) + head[0] +1;
 	if(size > 3075){
 		WS_Release(sp->wrk->ws,strlen(copy)+1);
 	}
@@ -145,7 +150,7 @@ unsigned url_encode(struct sess *sp, char* url,char *head){
 	return(1);
 }
 
-void decodeForm_multipart(struct sess *sp,char *tg){
+void decodeForm_multipart(struct sess *sp,char *tg,char *tghead){
 	
 	char head[256];
 	char bd[258];
@@ -175,6 +180,14 @@ void decodeForm_multipart(struct sess *sp,char *tg){
 	char tmp;
 	int hsize;
 	int idx;
+	int calc=0;
+	
+	char *basehead=0;
+	char *curhead;
+	int lhux;
+	int lhslen;
+	int lhsize;
+	int lhcnt=0;
 	while(1){
 		ed = strstr(st + 1,bd);
 		if(!ed) break;
@@ -203,6 +216,8 @@ void decodeForm_multipart(struct sess *sp,char *tg){
 		head[1] = 0;
 		snprintf(head +1,255,"%s:",ns);
 		ne[idx]=tmp;
+		
+		//
 
 		//filecheck
 		if(fn && fn < bod){
@@ -210,12 +225,37 @@ void decodeForm_multipart(struct sess *sp,char *tg){
 			st = ed;
 			continue;
 		}
+		///////////////////////////////////////////////
+		//変換用のリンクリストを作成
+		lhux = WS_Reserve(sp->wrk->ws, 0);
+		lhslen = strlen(head+1)+1;
+		lhsize = lhslen + sizeof(char*)+2;
+		if(lhux < lhsize){
+			return ;
+		}
+
+		if(!basehead){
+			curhead = (char*)sp->wrk->ws->f;
+			basehead = curhead;
+		}else{
+			((char**)curhead)[0] = (char*)sp->wrk->ws->f;
+			curhead = (char*)sp->wrk->ws->f;
+		}
+		lhcnt++;
+		
+		memcpy(curhead,head,lhslen);
+		curhead +=lhslen;
+		memset(curhead,0,sizeof(char*)+1);
+		curhead++;
+		WS_Release(sp->wrk->ws,lhsize);
+		///////////////////////////////////////////////
+		
 		ned = ed -2;
 		bod +=4;
 		tmp = ned[0];
 		ned[0]=0;
 		//bodyをURLエンコードする
-		if(!url_encode(sp,bod,head)){
+		if(!url_encode(sp,bod,head,&calc)){
 			//メモリない
 			ned[0]=tmp;
 			break;
@@ -232,6 +272,37 @@ void decodeForm_multipart(struct sess *sp,char *tg){
 		if(!ed)break;
 		st = ed;
 	}
+	//generate urlencodebody
+	//baseheadchk
+//	syslog(6,"%s",basehead);
+	//curhead = *(char**);
+	//calc
+//////////////
+	int u = WS_Reserve(sp->wrk->ws, 0);
+	if(u < calc + 1){
+		return;
+	}
+	char *oob,*ob; oob=ob= (char*)sp->wrk->ws->f;
+	char *ot;
+	WS_Release(sp->wrk->ws,calc+1);
+	int os;
+//////////////
+	for(int i=0;i<lhcnt;i++){
+		os = basehead[0];
+		memcpy(ob,basehead+1,os);
+		ob+=os-1;
+		ob[0]='=';
+		ob++;
+		ot=VRT_GetHdr(sp,HDR_REQ,basehead);
+		memcpy(ob,ot,strlen(ot));
+		ob +=strlen(ot);
+		ob[0]='&';
+		ob++;
+		basehead = *(char**)(basehead+strlen(basehead+1)+2);
+	}
+	oob[calc-1]=0;
+	VRT_SetHdr(sp, HDR_REQ, tghead, oob, vrt_magic_string_end);
+	
 }
 void decodeForm_urlencoded(struct sess *sp,char *tg){
 	char head[256];
@@ -265,14 +336,21 @@ void decodeForm_urlencoded(struct sess *sp,char *tg){
 	}
 }
 int 
-vmod_postcapture(struct sess *sp,const char* target,unsigned force){
+vmod_postcapture(struct sess *sp,const char* target){
 	
 	
 //デバッグでReInitとかrestartの時に不具合でないかチェック（ロールバックも）
 //Content = pipeline.e-bの時はRxbuf確保をしない（必要ないので）
-//mix形式をurlencodeに切り替える（組み換えで安全に）
+//mix形式をurlencodeに切り替える（組み換えで安全に）<-完了
 /*
-	
+	  string(41) "submitter\"=a&submitter2=b&submitter3=vcc"
+　　  string(42) "submitter%5C=a&submitter2=b&submitter3=vcc"
+　　  
+  string(39) "submitter=a&submitter2=b&submitter3=vcc"
+  string(39) "submitter=a&submitter2=b&submitter3=vcc"
+  string(83) "submitter=%e3%81%82%e3%81%84%e3%81%86%e3%81%88%e3%81%8a&submitter2=b&submitter3=vcc"
+  string(83) "submitter=%E3%81%82%E3%81%84%E3%81%86%E3%81%88%E3%81%8A&submitter2=b&submitter3=vcc"
+
 	1	=成功
 	-1	=エラー		ワークスペースサイズが足りない
 	-2	=エラー		target/ContentLengthがない/不正
@@ -372,8 +450,8 @@ vmod_postcapture(struct sess *sp,const char* target,unsigned force){
 
 	//target
 	if(multipart){
-		if(force) VRT_SetHdr(sp, HDR_REQ, head, newbuffer, vrt_magic_string_end);
-		decodeForm_multipart(sp, newbuffer);
+//		if(force) VRT_SetHdr(sp, HDR_REQ, head, newbuffer, vrt_magic_string_end);
+		decodeForm_multipart(sp, newbuffer,head);
 	}else{
 		VRT_SetHdr(sp, HDR_REQ, head, newbuffer, vrt_magic_string_end);
 		decodeForm_urlencoded(sp, newbuffer);
