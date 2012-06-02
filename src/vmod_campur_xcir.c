@@ -90,7 +90,7 @@ void decodeForm_multipart(struct sess *sp,char *tg){
 	h_ctype_ptr = VRT_GetHdr(sp, HDR_REQ, "\015Content-Type:");
 //Jun  2 17:44:38 localhost varnishd[10055]: multipart/form-data; boundary=----WebKitFormBoundary9zMcPL0jwBSXMH2x	
 	boundary = strstr(h_ctype_ptr,"; boundary=");
-	if(!boundary || strlen(boundary) < 255) return;
+	if(!boundary || strlen(boundary) > 255) return;
 	boundary +=11;
 	bd[0] = '-';
 	bd[1] = '-';
@@ -149,7 +149,6 @@ void decodeForm_multipart(struct sess *sp,char *tg){
 		bod +=4;
 		tmp = ned[0];
 		ned[0]=0;
-		syslog(6,"--%s %s",head+1,bod);
 		VRT_SetHdr(sp, HDR_REQ, head, bod, vrt_magic_string_end);
 		ned[0]=tmp;
 		//search \r\n\r\n
