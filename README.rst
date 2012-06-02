@@ -47,7 +47,7 @@ postcapture
 Prototype
         ::
 
-                postcapture()
+                postcapture(STRING target)
 Return value
 	INT
 Description
