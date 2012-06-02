@@ -49,16 +49,22 @@ Prototype
 
                 postcapture()
 Return value
-	STRING
+	INT
 Description
+	(experimental:Might change the parameter)
 	get POST request(Only "application/x-www-form-urlencoded")
 Example
         ::
 
-                std.log(campur_xcir.postcapture());
+                if(campur_xcir.postcapture("x-test") == 1){
+                  std.log("raw: " + req.http.x-test);
+                  std.log("submitter: " + req.http.submitter);
+                }
 
                 //response
-                12 VCL_Log      c submitter=&pics%2F=
+                12 VCL_Log      c raw: submitter=abcdef&submitter2=b
+                12 VCL_Log      c submitter: abcdef
+
 
 inet_pton
 -------------
