@@ -82,7 +82,7 @@ struct sockaddr_storage * vmod_inet_pton(struct sess *sp,unsigned ipv6,const cha
 	return tmp;
 	
 }
-char * url_encode(struct sess *sp, char* url,char *head){
+unsigned url_encode(struct sess *sp, char* url,char *head){
 	/*
 	base:
 	 http://d.hatena.ne.jp/hibinotatsuya/20091128/1259404695
@@ -95,7 +95,7 @@ char * url_encode(struct sess *sp, char* url,char *head){
 		///////////////////////////////////////////////
 		int u = WS_Reserve(sp->wrk->ws, 0);
 		if(u < size){
-			return NULL;
+			return 0;
 		}
 		copy = (char*)sp->wrk->ws->f;
 		///////////////////////////////////////////////
@@ -140,8 +140,9 @@ char * url_encode(struct sess *sp, char* url,char *head){
 	if(size > 3075){
 		WS_Release(sp->wrk->ws,strlen(copy)+1);
 	}
-    
-    return copy;
+    VRT_SetHdr(sp, HDR_REQ, head, copy, vrt_magic_string_end);
+//    return copy;
+	return(1);
 }
 
 void decodeForm_multipart(struct sess *sp,char *tg){
@@ -172,7 +173,6 @@ void decodeForm_multipart(struct sess *sp,char *tg){
 	char* bod;
 	char* fn;
 	char tmp;
-	char *uebod;
 	int hsize;
 	int idx;
 	while(1){
@@ -214,10 +214,13 @@ void decodeForm_multipart(struct sess *sp,char *tg){
 		tmp = ned[0];
 		ned[0]=0;
 		//bodyをURLエンコードする
-		uebod = url_encode(sp,bod,head);
-		if(uebod){
-			VRT_SetHdr(sp, HDR_REQ, head, uebod, vrt_magic_string_end);
+		if(!url_encode(sp,bod,head)){
+			//メモリない
+			break;
 		}
+//		if(uebod){
+//			VRT_SetHdr(sp, HDR_REQ, head, uebod, vrt_magic_string_end);
+//		}
 		ned[0]=tmp;
 		//search \r\n\r\n
 		
