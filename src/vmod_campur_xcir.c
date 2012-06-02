@@ -177,6 +177,7 @@ void decodeForm_multipart(struct sess *sp,char *tg){
 	int idx;
 	while(1){
 		ed = strstr(st + 1,bd);
+		if(!ed) break;
 		//getdata
 		ns = strstr(st+bdlen,"name=\"");
 		if(!ns) break;
@@ -216,6 +217,7 @@ void decodeForm_multipart(struct sess *sp,char *tg){
 		//bodyをURLエンコードする
 		if(!url_encode(sp,bod,head)){
 			//メモリない
+			ned[0]=tmp;
 			break;
 		}
 //		if(uebod){
@@ -262,7 +264,6 @@ void decodeForm_urlencoded(struct sess *sp,char *tg){
 		tgt = amp + 1;
 	}
 }
-//----MMM893
 int 
 vmod_postcapture(struct sess *sp,const char* target,unsigned force){
 	
@@ -323,8 +324,8 @@ vmod_postcapture(struct sess *sp,const char* target,unsigned force){
 	}
 
 	
-	int maxlen = params->http_req_hdr_len + 1;
-	if(Tlen(sp->htc->pipeline) == content_length){
+//	int maxlen = params->http_req_hdr_len + 1;
+	if(sp->htc->pipeline.b != NULL && Tlen(sp->htc->pipeline) == content_length){
 		//no read
 		newbuffer = sp->htc->pipeline.b;
 	}else{
