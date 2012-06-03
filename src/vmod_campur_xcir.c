@@ -33,7 +33,7 @@ vmod_gethash(struct sess *sp){
 	}
 	
 	char *tmp = (char *)sp->wrk->ws->f;
-	for(int i = 0; i < DIGEST_LEN; i++)
+	for(int i = 0; i < DIGEST_LEN; ++i)
 		sprintf(tmp + 2 * i, "%02x",sp->digest[i]);
 	WS_Release(sp->wrk->ws, size);
 	return tmp;
@@ -85,48 +85,51 @@ struct sockaddr_storage * vmod_inet_pton(struct sess *sp,unsigned ipv6,const cha
 //先にこっちでサイズを計算してurlencode形式に変更するint*
 
 unsigned __url_encode(char* url,int *calc,char *copy){
-    int i;
-    char *pt = url;
-    unsigned char c;
-    char *url_en = copy;
+	/*
+	  base:http://d.hatena.ne.jp/hibinotatsuya/20091128/1259404695
+	*/
+	int i;
+	char *pt = url;
+	unsigned char c;
+	char *url_en = copy;
 
-    for(i = 0; i < strlen(pt); i++){
-        c = *url;
+	for(i = 0; i < strlen(pt); ++i){
+		c = *url;
 
-        if((c >= '0' && c <= '9')
-        || (c >= 'A' && c <= 'Z')
-        || (c >= 'a' && c <= 'z')
-        || (c == '\'')
-        || (c == '*')
-        || (c == ')')
-        || (c == '(')
-        || (c == '-')
-        || (c == '.')
-        || (c == '_')){
-            *url_en = c;
-            ++url_en;
-        }else if(c == ' '){
-            *url_en = '+';
-            ++url_en;
-        }else{
-            *url_en = '%';
-            ++url_en;
-            sprintf(url_en, "%02x", c);
-            url_en = url_en + 2;
-        }
+		if((c >= '0' && c <= '9')
+		|| (c >= 'A' && c <= 'Z')
+		|| (c >= 'a' && c <= 'z')
+		|| (c == '\'')
+		|| (c == '*')
+		|| (c == ')')
+		|| (c == '(')
+		|| (c == '-')
+		|| (c == '.')
+		|| (c == '_')){
+			*url_en = c;
+			++url_en;
+		}else if(c == ' '){
+			*url_en = '+';
+			++url_en;
+		}else{
+			*url_en = '%';
+			++url_en;
+			sprintf(url_en, "%02x", c);
+			url_en = url_en + 2;
+		}
+		++url;
+	}
 
-        ++url;
-    }
-    
-    *url_en = 0;
+	*url_en = 0;
 	return(1);
 }
-unsigned url_encode(struct sess *sp, char* url,char *head,int *calc){
+unsigned url_encode_setHdr(struct sess *sp, char* url,char *head,int *encoded_size){
 	char *copy;
 	char buf[3075];
 	int size = 3 * strlen(url) + 3;
 	if(size > 3075){
 		///////////////////////////////////////////////
+		//use ws
 		int u = WS_Reserve(sp->wrk->ws, 0);
 		if(u < size){
 			return 0;
@@ -136,101 +139,106 @@ unsigned url_encode(struct sess *sp, char* url,char *head,int *calc){
 	}else{
 		copy = buf;
 	}
-	__url_encode(url,calc,copy);
-//////////////
-	//13 34 47
-	//bodysize
+	__url_encode(url,encoded_size,copy);
 
-	*calc += strlen(copy) + head[0] +1;
+	*encoded_size += strlen(copy) + head[0] +1;
 	if(size > 3075){
 		WS_Release(sp->wrk->ws,strlen(copy)+1);
 	}
+	//sethdr
     VRT_SetHdr(sp, HDR_REQ, head, copy, vrt_magic_string_end);
-//    return copy;
 	return(1);
 }
 
-void decodeForm_multipart(struct sess *sp,char *tg,char *tghead){
+void decodeForm_multipart(struct sess *sp,char *body,char *tgHead,unsigned parseFile){
 	
-	char head[256];
-	char bd[258];
-	char *tgt = tg;
-	char *boundary, *h_ctype_ptr;
-	h_ctype_ptr = VRT_GetHdr(sp, HDR_REQ, "\015Content-Type:");
-//Jun  2 17:44:38 localhost varnishd[10055]: multipart/form-data; boundary=----WebKitFormBoundary9zMcPL0jwBSXMH2x	
-	boundary = strstr(h_ctype_ptr,"; boundary=");
-	if(!boundary || strlen(boundary) > 255) return;
-	boundary +=11;
-	bd[0] = '-';
-	bd[1] = '-';
-	bd[2] = 0;
-	strncat(bd,boundary,strlen(boundary));
-	
-	int bdlen = strlen(bd);
-	
-//	strlen(boundary);
-	char* st = strstr(tgt,bd);
-	char* ed;
-	char* ned;
-	char* ns;
-	char* ne;
-	char* ne2;
-	char* bod;
-	char* fn;
 	char tmp;
-	int hsize;
-	int idx;
-	int calc=0;
+	char head[256];
+	char sk_boundary[258];
+	char *raw_boundary, *h_ctype_ptr;
+	char *p_start, *p_end, *p_body_end, *name_line_end, *name_line_end_tmp, *start_body, *sc_name, *sc_filename;
+	int  hsize, boundary_size ,idx;
 	
-	char *basehead=0;
+	char *tmpbody    = body;
+	int  encoded_size= 0;
+	char *basehead   = 0;
 	char *curhead;
-	int lhux;
-	int lhslen;
-	int lhsize;
-	int lhcnt=0;
-	while(1){
-		ed = strstr(st + 1,bd);
-		if(!ed) break;
-		//getdata
-		ns = strstr(st+bdlen,"name=\"");
-		if(!ns) break;
-		ns+=6;
-		ne  = strstr(ns,"\"\r\n");
-		ne2 = strstr(ns,"\"; ");
-		bod = strstr(ns,"\r\n\r\n");
-		fn = strstr(ns,"; filename");
-		if(!ne) break;
-		if(ne2 && ne2 < ne) ne = ne2;
-		if(!bod) break;
+	int  ll_u, ll_head_len, ll_size;
+	int  ll_entry_count = 0;
+	
+	//////////////////////////////
+	//get boundary
+	h_ctype_ptr = VRT_GetHdr(sp, HDR_REQ, "\015Content-Type:");
+	raw_boundary = strstr(h_ctype_ptr,"; boundary=");
+	if(!raw_boundary || strlen(raw_boundary) > 255) return;
+	raw_boundary   +=11;
+	sk_boundary[0] = '-';
+	sk_boundary[1] = '-';
+	sk_boundary[2] = 0;
+	strncat(sk_boundary,raw_boundary,strlen(raw_boundary));
+	boundary_size = strlen(sk_boundary);
 
-		if((ne -1)[0]=='\\'){
+
+	p_start = strstr(tmpbody,sk_boundary);
+	while(1){
+		///////////////////////////////////////////////
+		//search data
+
+		//boundary
+		p_end = strstr(p_start + 1,sk_boundary);
+		if(!p_end) break;
+		//name
+		sc_name = strstr(p_start +boundary_size,"name=\"");
+		if(!sc_name) break;
+		sc_name+=6;
+		//line end
+		name_line_end  = strstr(sc_name,"\"\r\n");
+		name_line_end_tmp = strstr(sc_name,"\"; ");
+		if(!name_line_end) break;
+		
+		if(name_line_end_tmp && name_line_end_tmp < name_line_end)
+			name_line_end = name_line_end_tmp;
+		
+		//body
+		start_body = strstr(sc_name,"\r\n\r\n");
+		if(!start_body) break;
+		//filename
+		sc_filename  = strstr(sc_name,"; filename");
+
+		///////////////////////////////////////////////
+		//build head
+		if((name_line_end -1)[0]=='\\'){
 			idx = 1;
 		}else{
 			idx=0;
 		}
-		tmp=ne[idx];
-		ne[idx]=0;
-		hsize=strlen(ns) +1;
+		tmp                   = name_line_end[idx];
+		name_line_end[idx]    = 0;
+		hsize                 = strlen(sc_name)+1;
 		if(hsize > 255) break;
-		head[0] = hsize;
-		head[1] = 0;
-		snprintf(head +1,255,"%s:",ns);
-		ne[idx]=tmp;
+		head[0]               = hsize;
+		head[1]               = 0;
+		snprintf(head +1,255,"%s:",sc_name);
+		name_line_end[idx]    = tmp;
 		
-		//
 
-		//filecheck
-		if(fn && fn < bod){
-			//content is file(skip)
-			st = ed;
-			continue;
-		}
 		///////////////////////////////////////////////
-		//変換用のリンクリストを作成
-		lhux = WS_Reserve(sp->wrk->ws, 0);
-		lhslen = strlen(head+1)+1;
-		lhsize = lhslen + sizeof(char*)+2;
-		if(lhux < lhsize){
+		//filecheck
+		if(!parseFile){
+			if(sc_filename && sc_filename < start_body){
+				//content is file(skip)
+				p_start = p_end;
+				continue;
+			}
+		}
+		
+		///////////////////////////////////////////////
+		//create linked list
+		//use ws
+		ll_u = WS_Reserve(sp->wrk->ws, 0);
+		ll_head_len = strlen(head +1) +1;
+		ll_size = ll_head_len + sizeof(char*)+2;
+		if(ll_u < ll_size){
 			return ;
 		}
 
@@ -241,104 +249,114 @@ void decodeForm_multipart(struct sess *sp,char *tg,char *tghead){
 			((char**)curhead)[0] = (char*)sp->wrk->ws->f;
 			curhead = (char*)sp->wrk->ws->f;
 		}
-		lhcnt++;
+		++ll_entry_count;
 		
-		memcpy(curhead,head,lhslen);
-		curhead +=lhslen;
+		memcpy(curhead,head,ll_head_len);
+		curhead +=ll_head_len;
 		memset(curhead,0,sizeof(char*)+1);
-		curhead++;
-		WS_Release(sp->wrk->ws,lhsize);
+		++curhead;
+		WS_Release(sp->wrk->ws,ll_size);
 		///////////////////////////////////////////////
 		
-		ned = ed -2;
-		bod +=4;
-		tmp = ned[0];
-		ned[0]=0;
+		///////////////////////////////////////////////
+		//url encode & set header
+		p_body_end    = p_end -2;
+		start_body    +=4;
+		tmp           = p_body_end[0];
+		p_body_end[0] = 0;
 		//bodyをURLエンコードする
-		if(!url_encode(sp,bod,head,&calc)){
+		if(!url_encode_setHdr(sp,start_body,head,&encoded_size)){
 			//メモリない
-			ned[0]=tmp;
+			p_body_end[0] = tmp;
 			break;
 		}
-//		if(uebod){
-//			VRT_SetHdr(sp, HDR_REQ, head, uebod, vrt_magic_string_end);
-//		}
-		ned[0]=tmp;
-		//search \r\n\r\n
+		p_body_end[0] = tmp;
+
+		///////////////////////////////////////////////
+		//check last boundary
+		if(!p_end) break;
 		
-		//search name="
-		//"\r
-		//" ;
-		if(!ed)break;
-		st = ed;
+		p_start = p_end;
 	}
-	//generate urlencodebody
-	//baseheadchk
-//	syslog(6,"%s",basehead);
-	//curhead = *(char**);
-	//calc
-//////////////
+	if(tgHead[0] == NULL) return;
+
+	//////////////
+	//genarate x-www-form-urlencoded format data
+	
+	//////////////
+	//use ws
 	int u = WS_Reserve(sp->wrk->ws, 0);
-	if(u < calc + 1){
+	if(u < encoded_size + 1){
 		return;
 	}
-	char *oob,*ob; oob=ob= (char*)sp->wrk->ws->f;
-	char *ot;
-	WS_Release(sp->wrk->ws,calc+1);
-	int os;
-//////////////
-	for(int i=0;i<lhcnt;i++){
-		os = basehead[0];
-		memcpy(ob,basehead+1,os);
-		ob+=os-1;
-		ob[0]='=';
-		ob++;
-		ot=VRT_GetHdr(sp,HDR_REQ,basehead);
-		memcpy(ob,ot,strlen(ot));
-		ob +=strlen(ot);
-		ob[0]='&';
-		ob++;
-		basehead = *(char**)(basehead+strlen(basehead+1)+2);
+	
+	char *orig_cv_body, *cv_body, *h_val;
+	orig_cv_body = cv_body = (char*)sp->wrk->ws->f;
+	
+	WS_Release(sp->wrk->ws,encoded_size+1);
+	//////////////
+	for(int i=0;i<ll_entry_count;++i){
+		hsize = basehead[0];
+		memcpy(cv_body,basehead+1,hsize);
+		cv_body    += hsize - 1;
+		cv_body[0] ='=';
+		++cv_body;
+		h_val      = VRT_GetHdr(sp,HDR_REQ,basehead);
+		memcpy(cv_body,h_val,strlen(h_val));
+		cv_body    +=strlen(h_val);
+		cv_body[0] ='&';
+		++cv_body;
+		basehead   = *(char**)(basehead+strlen(basehead+1)+2);
 	}
-	oob[calc-1]=0;
-	VRT_SetHdr(sp, HDR_REQ, tghead, oob, vrt_magic_string_end);
+	orig_cv_body[encoded_size - 1] =0;
+	
+	VRT_SetHdr(sp, HDR_REQ, tgHead, orig_cv_body, vrt_magic_string_end);
 	
 }
-void decodeForm_urlencoded(struct sess *sp,char *tg){
+void decodeForm_urlencoded(struct sess *sp,char *body){
 	char head[256];
-	char *eq,*amp;
-	char *tgt = tg;
+	char *sc_eq,*sc_amp;
+	char *tmpbody = body;
 	int hsize;
 	char tmp;
+	
 	while(1){
-		if(!(eq = strchr(tgt,'='))){
+		//////////////////////////////
+		//search word
+		if(!(sc_eq = strchr(tmpbody,'='))){
 			break;
 		}
-		if(!(amp = strchr(tgt,'&'))){
-			amp = eq + strlen(tgt);
+		if(!(sc_amp = strchr(tmpbody,'&'))){
+			sc_amp = sc_eq + strlen(tmpbody);
 		}
-		//head build;
-		tmp = eq[0];
-		eq[0] = 0;// = -> null
 		
-		hsize = strlen(tgt) + 1;
+		//////////////////////////////
+		//build head
+		tmp = sc_eq[0];
+		sc_eq[0] = 0;// = -> null
+		
+		hsize = strlen(tmpbody) + 1;
 		if(hsize > 255) return;
-		head[0] = hsize;
-		head[1] = 0;
-		snprintf(head +1,255,"%s:",tgt);
-		eq[0] = tmp;
-		tgt = eq + 1;
-		tmp = amp[0];
-		amp[0] = 0;// & -> null
-		VRT_SetHdr(sp, HDR_REQ, head, tgt, vrt_magic_string_end);
-		amp[0] = tmp;
-		tgt = amp + 1;
+		head[0]   = hsize;
+		head[1]   = 0;
+		snprintf(head +1,255,"%s:",tmpbody);
+		sc_eq[0]  = tmp;
+
+		//////////////////////////////
+		//build body
+		tmpbody   = sc_eq + 1;
+		tmp       = sc_amp[0];
+		sc_amp[0] = 0;// & -> null
+
+		//////////////////////////////
+		//set header
+		VRT_SetHdr(sp, HDR_REQ, head, tmpbody, vrt_magic_string_end);
+		sc_amp[0] = tmp;
+		tmpbody   = sc_amp + 1;
 	}
 }
 int 
-vmod_postcapture(struct sess *sp,const char* target){
-	
-	
+vmod_postcapture(struct sess *sp,const char* tgHeadName,unsigned parseFile){
 //デバッグでReInitとかrestartの時に不具合でないかチェック（ロールバックも）
 //Content = pipeline.e-bの時はRxbuf確保をしない（必要ないので）
 //mix形式をurlencodeに切り替える（組み換えで安全に）<-完了
@@ -361,100 +379,113 @@ vmod_postcapture(struct sess *sp,const char* target){
 		!VRT_strcmp(VRT_r_req_request(sp), "PUT")
 	)){return "";}
 */
-	unsigned long content_length,orig_content_length;
-	char *h_clen_ptr, *h_ctype_ptr, *newbuffer;
-	int buf_size, rsize;
-	char buf[1024];
-	char head[256];
+	unsigned long	content_length,orig_content_length;
+	char 			*h_clen_ptr, *h_ctype_ptr, *body;
+	int				buf_size, rsize;
+	char			buf[1024],tgHead[256];
+	unsigned		multipart = 0;
 
 	
 	
-	//headbuild
-	int hsize = strlen(target) +1;
-	if(hsize > 255){
-		return -2;
+	//////////////////////////////
+	//build tgHead
+	int hsize = strlen(tgHeadName) +1;
+	if(hsize > 1){
+		if(hsize > 255) return -2;
+		tgHead[0] = hsize;
+		tgHead[1] = 0;
+		snprintf(tgHead +1,255,"%s:",tgHeadName);
+	}else{
+		tgHead[0] = NULL;
 	}
-	head[0] = hsize;
-	head[1] = 0;
-	snprintf(head +1,255,"%s:",target);
-	
-	unsigned multipart = 0;
-	
+
+	//////////////////////////////
+	//check Content-Type
 	h_ctype_ptr = VRT_GetHdr(sp, HDR_REQ, "\015Content-Type:");
-//Jun  2 17:44:38 localhost varnishd[10055]: multipart/form-data; boundary=----WebKitFormBoundary9zMcPL0jwBSXMH2x
 	
 	if (!VRT_strcmp(h_ctype_ptr, "application/x-www-form-urlencoded")) {
-		//multipart/form-data
+		//application/x-www-form-urlencoded
 	}else if(h_ctype_ptr != NULL && h_ctype_ptr == strstr(h_ctype_ptr, "multipart/form-data")){
+		//multipart/form-data
 		multipart = 1;
 	}else{
+		//none support type
 		return -4;
 	}
 
+	//////////////////////////////
+	//check Content-Length
 	h_clen_ptr = VRT_GetHdr(sp, HDR_REQ, "\017Content-Length:");
 	if (!h_clen_ptr) {
+		//can't get
 		return -2;
 	}
 	orig_content_length = content_length = strtoul(h_clen_ptr, NULL, 10);
 
 	if (content_length <= 0) {
+		//illegal length
 		return -2;
 	}
 
-	
-//	int maxlen = params->http_req_hdr_len + 1;
+	//////////////////////////////
+	//Check POST data is loaded
 	if(sp->htc->pipeline.b != NULL && Tlen(sp->htc->pipeline) == content_length){
-		//no read
-		newbuffer = sp->htc->pipeline.b;
+		//complete read
+		body = sp->htc->pipeline.b;
 	}else{
-		int rxbuf = Tlen(sp->htc->rxbuf);
+		//incomplete read
+		
+		int rxbuf_size = Tlen(sp->htc->rxbuf);
 		///////////////////////////////////////////////
+		//use ws
 		int u = WS_Reserve(sp->wrk->ws, 0);
-		if(u < content_length + rxbuf + 1){
+		if(u < content_length + rxbuf_size + 1){
 			return -1;
 		}
-		newbuffer = (char*)sp->wrk->ws->f;
-		memcpy(newbuffer, sp->htc->rxbuf.b, rxbuf);
-		sp->htc->rxbuf.b = newbuffer;
-		newbuffer += rxbuf;
-		newbuffer[0]= 0;
-		sp->htc->rxbuf.e = newbuffer;
-		WS_Release(sp->wrk->ws,content_length + rxbuf + 1);
+		body = (char*)sp->wrk->ws->f;
+		memcpy(body, sp->htc->rxbuf.b, rxbuf_size);
+		sp->htc->rxbuf.b = body;
+		body += rxbuf_size;
+		body[0]= 0;
+		sp->htc->rxbuf.e = body;
+		WS_Release(sp->wrk->ws,content_length + rxbuf_size + 1);
 		///////////////////////////////////////////////
 		
+		//////////////////////////////
+		//read post data
 		while (content_length) {
-				if (content_length > sizeof(buf)) {
-					buf_size = sizeof(buf) - 1;
-				}
-				else {
-					buf_size = content_length;
-				}
+			if (content_length > sizeof(buf)) {
+				buf_size = sizeof(buf) - 1;
+			}
+			else {
+				buf_size = content_length;
+			}
 
-				// read body data into 'buf'
-				rsize = HTC_Read(sp->htc, buf, buf_size);
+			// read body data into 'buf'
+			rsize = HTC_Read(sp->htc, buf, buf_size);
 
-				if (rsize <= 0) {
-					return -3;
-				}
+			if (rsize <= 0) {
+				return -3;
+			}
 
-				hsize += rsize;
-				content_length -= rsize;
+			hsize += rsize;
+			content_length -= rsize;
 
-				strncat(newbuffer, buf, buf_size);
-
+			strncat(body, buf, buf_size);
 		}
-		sp->htc->pipeline.b = newbuffer;
-		sp->htc->pipeline.e = newbuffer + orig_content_length;
+		sp->htc->pipeline.b = body;
+		sp->htc->pipeline.e = body + orig_content_length;
 	}
 
 
-	//target
+	//////////////////////////////
+	//decode form
 	if(multipart){
-//		if(force) VRT_SetHdr(sp, HDR_REQ, head, newbuffer, vrt_magic_string_end);
-		decodeForm_multipart(sp, newbuffer,head);
+		decodeForm_multipart(sp, body,tgHead,parseFile);
 	}else{
-		VRT_SetHdr(sp, HDR_REQ, head, newbuffer, vrt_magic_string_end);
-		decodeForm_urlencoded(sp, newbuffer);
+		if(tgHead[0] != NULL)
+			VRT_SetHdr(sp, HDR_REQ, tgHead, body, vrt_magic_string_end);
+		decodeForm_urlencoded(sp, body);
 	}
 	return 1;
 }
